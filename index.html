@@ -3,21 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VOID // realtime volumetric raymarch</title>
+<title>STRESS TEST GPU // realtime volumetric raymarch</title>
 
 <!-- Open Graph — controls how this page previews on Discord, Facebook, Zalo... -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="VOID // realtime volumetric raymarch">
+<meta property="og:title" content="STRESS TEST GPU // realtime volumetric raymarch">
 <meta property="og:description" content="Fragment shader raymarching thuần GPU: khối 5D fused-metaball xoay trong không gian, 320 bước raymarch, 9 octave fbm — không texture, không mesh.">
-<meta property="og:image" content="./og-image.png">
+<meta property="og:image" content="https://stress-test.github.io/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:url" content="https://stress-test.github.io/">
 
 <!-- Twitter Card (X, và một số client dùng chung chuẩn này) -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="VOID // realtime volumetric raymarch">
+<meta name="twitter:title" content="STRESS TEST GPU // realtime volumetric raymarch">
 <meta name="twitter:description" content="Fragment shader raymarching thuần GPU: khối 5D fused-metaball xoay trong không gian, 320 bước raymarch, 9 octave fbm.">
-<meta name="twitter:image" content="./og-image.png">
+<meta name="twitter:image" content="https://stress-test.github.io/og-image.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -214,7 +215,7 @@
 
 <div class="overlay">
   <div class="row">
-    <div class="tag"><span class="dot"></span> GPU SHADER — REALTIME VOLUMETRIC</div>
+    <div class="tag"><span class="dot"></span> STRESS TEST GPU — REALTIME VOLUMETRIC</div>
     <div class="stats">
       FPS <b id="fps">--</b><br>
       RESOLUTION <b id="res">--</b><br>
@@ -229,7 +230,7 @@
   <div class="row bottom-row">
     <div class="hero">
       <div class="eyebrow">/// nặng đô đúng nghĩa</div>
-      <h1>VOLUMETRIC<br><em>VOID ENGINE</em></h1>
+      <h1>STRESS TEST<br><em>GPU</em></h1>
       <div class="sub">Một fragment shader raymarching thuần GPU: mỗi pixel dò tia qua trường nhiễu fractal 3D và một khối gồ ghề được nấu chảy (metaball) từ 6 đỉnh của một hình 5-simplex thật — xoay trên nhiều mặt phẳng trong không gian 5 chiều rồi chiếu tầng 5D→4D→3D mỗi khung hình, không phải khối 3D giả danh. Màu sắc điều chế từ nhiều biến trạng thái cùng lúc. Mặc định đã bật full tải — kéo thanh trượt để giảm nếu máy nóng.</div>
     </div>
 
