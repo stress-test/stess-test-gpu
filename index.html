@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VOID // realtime volumetric raymarch</title>
+
+<!-- Open Graph — controls how this page previews on Discord, Facebook, Zalo... -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="VOID // realtime volumetric raymarch">
+<meta property="og:description" content="Fragment shader raymarching thuần GPU: khối 5D fused-metaball xoay trong không gian, 320 bước raymarch, 9 octave fbm — không texture, không mesh.">
+<meta property="og:image" content="./og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+
+<!-- Twitter Card (X, và một số client dùng chung chuẩn này) -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="VOID // realtime volumetric raymarch">
+<meta name="twitter:description" content="Fragment shader raymarching thuần GPU: khối 5D fused-metaball xoay trong không gian, 320 bước raymarch, 9 octave fbm.">
+<meta name="twitter:image" content="./og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#050508;
+    --ink:#e9e9f0;
+    --ink-dim:rgba(233,233,240,0.5);
+    --ink-dimmer:rgba(233,233,240,0.28);
+    --magenta:#ff2e6c;
+    --cyan:#00e5c7;
+    --amber:#ffb020;
+    --hairline:rgba(233,233,240,0.14);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{
+    width:100%;height:100%;
+    background:var(--void);
+    overflow:hidden;
+    font-family:'IBM Plex Mono',monospace;
+    color:var(--ink);
+  }
+  canvas{
+    position:fixed;
+    inset:0;
+    width:100%;
+    height:100%;
+    display:block;
+  }
+
+  .overlay{
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    padding:clamp(18px,3vw,40px);
+    z-index:5;
+  }
+
+  .row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    width:100%;
+  }
+
+  .tag{
+    font-size:11px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .tag .dot{
+    width:6px;height:6px;border-radius:50%;
+    background:var(--magenta);
+    box-shadow:0 0 8px var(--magenta);
+    animation:pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{opacity:1; transform:scale(1);}
+    50%{opacity:0.35; transform:scale(0.7);}
+  }
+
+  .stats{
+    text-align:right;
+    font-size:11px;
+    line-height:1.9;
+    color:var(--ink-dim);
+    letter-spacing:0.04em;
+  }
+  .stats b{
+    color:var(--cyan);
+    font-weight:600;
+  }
+
+  .hero{
+    max-width:920px;
+  }
+  .eyebrow{
+    font-size:11px;
+    letter-spacing:0.22em;
+    text-transform:uppercase;
+    color:var(--amber);
+    margin-bottom:18px;
+  }
+  h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:clamp(38px,7vw,92px);
+    line-height:0.98;
+    letter-spacing:-0.02em;
+    color:var(--ink);
+    text-shadow:0 0 60px rgba(0,0,0,0.6);
+  }
+  h1 em{
+    font-style:normal;
+    background:linear-gradient(90deg,var(--magenta),var(--amber) 55%,var(--cyan));
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  .sub{
+    margin-top:16px;
+    max-width:520px;
+    font-size:14px;
+    line-height:1.7;
+    color:var(--ink-dim);
+    letter-spacing:0.01em;
+  }
+
+  .bottom-row{
+    align-items:flex-end;
+  }
+
+  .controls{
+    pointer-events:auto;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    min-width:240px;
+  }
+  .ctrl-label{
+    display:flex;
+    justify-content:space-between;
+    font-size:10.5px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+  }
+  .ctrl-label b{ color:var(--ink); font-weight:600; }
+  input[type=range]{
+    -webkit-appearance:none;
+    width:100%;
+    height:2px;
+    background:var(--hairline);
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:12px;height:12px;border-radius:50%;
+    background:var(--ink);
+    box-shadow:0 0 12px rgba(233,233,240,0.5);
+    cursor:pointer;
+    margin-top:-5px;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:12px;height:12px;border-radius:50%;
+    background:var(--ink);
+    border:none;
+    cursor:pointer;
+  }
+
+  .legend{
+    display:flex;
+    gap:18px;
+    font-size:10px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--ink-dimmer);
+  }
+
+  .signature{
+    position:absolute;
+    bottom:clamp(18px,3vw,40px);
+    left:50%;
+    transform:translateX(-50%);
+    font-size:10px;
+    letter-spacing:0.2em;
+    text-transform:uppercase;
+    color:var(--ink-dimmer);
+    text-align:center;
+    white-space:nowrap;
+  }
+
+  @media (max-width:720px){
+    .row.bottom-row{ flex-direction:column; gap:28px; align-items:flex-start; }
+    .stats{ text-align:left; }
+    .signature{ display:none; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .tag .dot{ animation:none; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<div class="overlay">
+  <div class="row">
+    <div class="tag"><span class="dot"></span> GPU SHADER — REALTIME VOLUMETRIC</div>
+    <div class="stats">
+      FPS <b id="fps">--</b><br>
+      RESOLUTION <b id="res">--</b><br>
+      RAYMARCH STEPS <b id="steps">--</b><br>
+      FBM OCTAVES <b id="octaves">6</b><br>
+      GPU <b id="gpu">--</b><br>
+      CPU CORES <b id="cores">--</b><br>
+      PLATFORM <b id="platform">--</b>
+    </div>
+  </div>
+
+  <div class="row bottom-row">
+    <div class="hero">
+      <div class="eyebrow">/// nặng đô đúng nghĩa</div>
+      <h1>VOLUMETRIC<br><em>VOID ENGINE</em></h1>
+      <div class="sub">Một fragment shader raymarching thuần GPU: mỗi pixel dò tia qua trường nhiễu fractal 3D và một khối gồ ghề được nấu chảy (metaball) từ 6 đỉnh của một hình 5-simplex thật — xoay trên nhiều mặt phẳng trong không gian 5 chiều rồi chiếu tầng 5D→4D→3D mỗi khung hình, không phải khối 3D giả danh. Màu sắc điều chế từ nhiều biến trạng thái cùng lúc. Mặc định đã bật full tải — kéo thanh trượt để giảm nếu máy nóng.</div>
+    </div>
+
+    <div class="controls">
+      <div>
+        <div class="ctrl-label">GPU LOAD <b id="loadLabel">320 steps</b></div>
+        <input type="range" id="stepsSlider" min="16" max="320" value="320" step="4">
+      </div>
+      <div>
+        <div class="ctrl-label">NOISE DETAIL <b id="octLabel">9 oct</b></div>
+        <input type="range" id="octSlider" min="2" max="9" value="9" step="1">
+      </div>
+      <div class="legend">
+        <span>drag to orbit</span>
+        <span>scroll to zoom</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="signature">— mỗi khung hình được dựng lại từ số 0, không texture, không mesh, chỉ toán học —</div>
+
+<script>
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl2', { antialias:false, powerPreference:'high-performance' })
+        || canvas.getContext('webgl', { antialias:false, powerPreference:'high-performance' });
+
+if(!gl){
+  document.body.innerHTML = '<div style="color:#e9e9f0;font-family:monospace;padding:40px;">Trình duyệt không hỗ trợ WebGL.</div>';
+  throw new Error('no webgl');
+}
+
+const isGL2 = !!gl.getParameter && gl instanceof WebGL2RenderingContext;
+
+const vsSource = `
+attribute vec2 aPos;
+void main(){ gl_Position = vec4(aPos,0.0,1.0); }
+`;
+
+// Fragment shader: raymarched fbm-domain-warped volumetric nebula.
+// STEPS and OCTAVES are injected as #define to keep the loop bounds
+// constant (required by GLSL ES 1.0) while still being adjustable
+// by recompiling the program when the sliders move.
+function buildFragSource(steps, octaves){
+  return `
+precision highp float;
+
+uniform vec2  uRes;
+uniform float uTime;
+uniform vec2  uOrbit;   // yaw, pitch
+uniform float uZoom;
+
+#define STEPS ${steps}
+#define OCTAVES ${octaves}
+
+mat2 rot(float a){ float s=sin(a), c=cos(a); return mat2(c,-s,s,c); }
+
+float hash(vec3 p){
+  p = fract(p*0.3183099+0.1);
+  p *= 17.0;
+  return fract(p.x*p.y*p.z*(p.x+p.y+p.z));
+}
+
+float noise(vec3 x){
+  vec3 i = floor(x);
+  vec3 f = fract(x);
+  f = f*f*(3.0-2.0*f);
+  return mix(
+    mix(mix(hash(i+vec3(0,0,0)),hash(i+vec3(1,0,0)),f.x),
+        mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x), f.y),
+    mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),
+        mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x), f.y),
+    f.z);
+}
+
+float fbm(vec3 p){
+  float v = 0.0;
+  float a = 0.5;
+  mat2 r = rot(0.6);
+  for(int i=0;i<OCTAVES;i++){
+    v += a*noise(p);
+    p.xy = r*p.xy;
+    p *= 2.02;
+    a *= 0.5;
+  }
+  return v;
+}
+
+// domain-warped density field
+float density(vec3 p){
+  vec3 q = p;
+  q += vec3(0.0,0.0,uTime*0.35);
+  float warp = fbm(q*0.8);
+  vec3 warped = p + warp*1.4;
+  float n = fbm(warped*1.3 - vec3(0.0,uTime*0.15,0.0));
+  float sphere = 1.0 - length(p)*0.42;
+  return clamp(n*sphere*1.6 - 0.15, 0.0, 1.0);
+}
+
+vec3 palette(float t){
+  vec3 c1 = vec3(1.0,0.18,0.42);   // magenta
+  vec3 c2 = vec3(1.0,0.69,0.13);   // amber
+  vec3 c3 = vec3(0.0,0.9,0.78);    // cyan
+  vec3 col = mix(c1,c2, smoothstep(0.0,0.55,t));
+  col = mix(col,c3, smoothstep(0.45,1.0,t));
+  return col;
+}
+
+// --- rugged rocky mass fused from the edges/vertices of a rotating 5D simplex ---
+// uVerts holds the 6 vertices of a regular 5-simplex (hexateron), rotated in
+// several independent 5D planes and cascade-projected 5D -> 4D -> 3D on the
+// CPU every frame (see JS below), then rendered here as a fused metaball mass.
+uniform vec3 uVerts[6];
+
+float smin(float a, float b, float k){
+  float h = clamp(0.5+0.5*(b-a)/k, 0.0, 1.0);
+  return mix(b,a,h) - k*h*(1.0-h);
+}
+
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r){
+  vec3 pa = p-a, ba = b-a;
+  float h = clamp(dot(pa,ba)/dot(ba,ba), 0.0, 1.0);
+  return length(pa - ba*h) - r;
+}
+
+float cheapNoise(vec3 p){
+  return sin(p.x*1.3+p.y*0.7) * 0.5
+       + sin(p.y*2.1-p.z*1.1+1.7) * 0.35
+       + sin(p.z*1.7+p.x*0.9-0.6) * 0.3;
+}
+
+vec3 pal5d(float t){
+  // rainbow palette driven by several combined "state" dimensions (facet
+  // angle, surface roughness, time, radial position) for a shifting look
+  vec3 a = vec3(0.55,0.5,0.5);
+  vec3 b = vec3(0.5,0.5,0.5);
+  vec3 c = vec3(1.0,1.0,0.7);
+  vec3 d = vec3(0.0,0.33,0.67);
+  return a + b*cos(6.28318*(c*t+d));
+}
+
+float mapObj(vec3 p){
+  float d = 1e5;
+  for(int i=0;i<6;i++){
+    for(int j=0;j<6;j++){
+      if(j<=i) continue;
+      d = smin(d, sdCapsule(p, uVerts[i], uVerts[j], 0.05), 0.3);
+    }
+  }
+  for(int k=0;k<6;k++){
+    d = smin(d, length(p-uVerts[k]) - 0.16, 0.3);
+  }
+  float bump = cheapNoise(p*3.2 + vec3(0.0, uTime*0.15, 0.0));
+  return d - bump*0.1;
+}
+
+vec3 calcObjNormal(vec3 p){
+  vec2 e = vec2(0.0015,0.0);
+  return normalize(vec3(
+    mapObj(p+e.xyy)-mapObj(p-e.xyy),
+    mapObj(p+e.yxy)-mapObj(p-e.yxy),
+    mapObj(p+e.yyx)-mapObj(p-e.yyx)
+  ));
+}
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes) / uRes.y;
+
+  vec3 ro = vec3(0.0,0.0,-4.2*uZoom);
+  vec3 rd = normalize(vec3(uv, 1.6));
+
+  mat2 ry = rot(uOrbit.x);
+  mat2 rp = rot(uOrbit.y);
+  ro.xz = ry*ro.xz; rd.xz = ry*rd.xz;
+  ro.yz = rp*ro.yz; rd.yz = rp*rd.yz;
+
+  float tmin = 0.5, tmax = 9.0;
+  float t = tmin;
+  vec3 accumCol = vec3(0.0);
+  float accumA = 0.0;
+  float stepSize = (tmax-tmin)/float(STEPS);
+
+  for(int i=0;i<STEPS;i++){
+    vec3 p = ro + rd*t;
+
+    float dObj = mapObj(p);
+    if(dObj < 0.006 && accumA < 0.999){
+      vec3 n = calcObjNormal(p);
+      float fres = pow(1.0 - max(dot(-rd,n),0.0), 3.0);
+      float bump = cheapNoise(p*3.2 + vec3(0.0, uTime*0.15, 0.0));
+      float facet = dot(n, normalize(vec3(0.4,0.7,0.5)))*0.5+0.5;
+      float t5 = facet*1.4 + bump*1.1 + uTime*0.06 + length(p)*0.18;
+      vec3 base = pal5d(t5);
+      vec3 rim  = pal5d(t5+0.5) * fres * 1.7;
+      vec3 surf = base*0.6 + rim;
+      accumCol += (1.0-accumA) * surf;
+      accumA = 1.0;
+    }
+
+    float d = density(p);
+    if(d > 0.01 && accumA < 0.999){
+      float glow = d*d;
+      vec3 c = palette(d + 0.15*sin(uTime*0.2 + length(p)));
+      float a = clamp(d*stepSize*2.2, 0.0, 1.0);
+      accumCol += (1.0-accumA) * a * c * (1.0+glow);
+      accumA += (1.0-accumA) * a;
+    }
+    t += stepSize;
+  }
+
+  vec3 bg = mix(vec3(0.01,0.01,0.02), vec3(0.02,0.02,0.05), 0.5+0.5*uv.y);
+  vec3 col = bg*(1.0-accumA) + accumCol;
+
+  col = col/(col+vec3(0.9));
+  col = pow(col, vec3(0.85));
+
+  float vig = smoothstep(1.05, 0.35, length(uv));
+  col *= mix(0.55, 1.0, vig);
+
+  gl_FragColor = vec4(col,1.0);
+}
+`;
+}
+
+// --- genuine 5D geometry: a regular 5-simplex (hexateron), 6 vertices ---
+// living in 5-dimensional space. Rotated in several independent 5D planes
+// each frame, then cascade-projected 5D -> 4D -> 3D (the same technique
+// used to visualize a rotating tesseract, one dimension further) before
+// being handed to the shader as the 6 fused-metaball anchor points.
+function buildSimplex5D(){
+  const t = (2 + Math.sqrt(24)) / 10; // equal-edge-length solution
+  const verts = [];
+  for(let i=0;i<5;i++){
+    const v = [0,0,0,0,0];
+    v[i] = 1;
+    verts.push(v);
+  }
+  verts.push([t,t,t,t,t]);
+  const c = [0,0,0,0,0];
+  for(const v of verts) for(let k=0;k<5;k++) c[k] += v[k]/6;
+  for(const v of verts) for(let k=0;k<5;k++) v[k] -= c[k];
+  return verts;
+}
+const baseSimplex5D = buildSimplex5D();
+
+function rot5(v, i, j, a){
+  const c = Math.cos(a), s = Math.sin(a);
+  const vi = v[i], vj = v[j];
+  v[i] = vi*c - vj*s;
+  v[j] = vi*s + vj*c;
+}
+
+const projScratch = [];
+function project5DFrame(time){
+  const verts3D = [];
+  for(const base of baseSimplex5D){
+    const v = base.slice();
+    rot5(v, 0,1, time*0.31);
+    rot5(v, 2,3, time*0.19);
+    rot5(v, 0,4, time*0.24);
+    rot5(v, 1,3, time*0.13);
+    rot5(v, 2,4, time*0.27);
+
+    // 5D -> 4D perspective projection (divide by distance along 5th axis)
+    const D5 = 3.2;
+    const f5 = D5 / (D5 - v[4]);
+    const p4 = [v[0]*f5, v[1]*f5, v[2]*f5, v[3]*f5];
+
+    // 4D -> 3D perspective projection
+    const D4 = 2.6;
+    const f4 = D4 / (D4 - p4[3]);
+    const SCALE = 1.55;
+    verts3D.push([p4[0]*f4*SCALE, p4[1]*f4*SCALE, p4[2]*f4*SCALE]);
+  }
+  return verts3D;
+}
+
+function compile(type, src){
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if(!gl.getShaderParameter(sh, gl.COMPILE_STATUS)){
+    console.error(gl.getShaderInfoLog(sh));
+  }
+  return sh;
+}
+
+let program, uRes, uTime, uOrbit, uZoom, aPos, uVertsLoc;
+const quadBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+function buildProgram(steps, octaves){
+  const vs = compile(gl.VERTEX_SHADER, vsSource);
+  const fs = compile(gl.FRAGMENT_SHADER, buildFragSource(steps, octaves));
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){
+    console.error(gl.getProgramInfoLog(prog));
+  }
+  if(program) gl.deleteProgram(program);
+  program = prog;
+  gl.useProgram(program);
+
+  aPos = gl.getAttribLocation(program, 'aPos');
+  gl.enableVertexAttribArray(aPos);
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  uRes   = gl.getUniformLocation(program, 'uRes');
+  uTime  = gl.getUniformLocation(program, 'uTime');
+  uOrbit = gl.getUniformLocation(program, 'uOrbit');
+  uZoom  = gl.getUniformLocation(program, 'uZoom');
+  uVertsLoc = [];
+  for(let i=0;i<6;i++){
+    uVertsLoc.push(gl.getUniformLocation(program, `uVerts[${i}]`));
+  }
+}
+
+let stepsCount, octCount;
+
+// device info — read locally and shown on screen only, nothing is sent anywhere
+(function showDeviceInfo(){
+  let gpuStr = 'không rõ';
+  const dbgInfo = gl.getExtension('WEBGL_debug_renderer_info');
+  if(dbgInfo){
+    gpuStr = gl.getParameter(dbgInfo.UNMASKED_RENDERER_WEBGL) || gpuStr;
+  } else {
+    gpuStr = gl.getParameter(gl.RENDERER) || gpuStr;
+  }
+  document.getElementById('gpu').textContent = gpuStr;
+  document.getElementById('cores').textContent = navigator.hardwareConcurrency || 'không rõ';
+  document.getElementById('platform').textContent = navigator.platform || 'không rõ';
+})();
+
+function resize(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.floor(window.innerWidth * dpr);
+  const h = Math.floor(window.innerHeight * dpr);
+  if(canvas.width !== w || canvas.height !== h){
+    canvas.width = w;
+    canvas.height = h;
+    gl.viewport(0,0,w,h);
+  }
+  document.getElementById('res').textContent = window.innerWidth + '×' + window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// interaction: drag to orbit, scroll to zoom
+let orbit = [0.0, 0.15];
+let zoom = 1.0;
+let dragging = false;
+let lastX=0, lastY=0;
+
+canvas.addEventListener('pointerdown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
+window.addEventListener('pointerup', ()=> dragging=false);
+window.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  const dx = e.clientX-lastX, dy = e.clientY-lastY;
+  orbit[0] += dx*0.005;
+  orbit[1] = Math.max(-1.2, Math.min(1.2, orbit[1] + dy*0.005));
+  lastX=e.clientX; lastY=e.clientY;
+});
+window.addEventListener('wheel', e=>{
+  zoom = Math.max(0.5, Math.min(2.5, zoom + e.deltaY*0.001));
+}, {passive:true});
+
+// slow auto-orbit when idle
+let idle = true;
+canvas.addEventListener('pointerdown', ()=> idle=false);
+
+// sliders
+const stepsSlider = document.getElementById('stepsSlider');
+const octSlider = document.getElementById('octSlider');
+const loadLabel = document.getElementById('loadLabel');
+const octLabel = document.getElementById('octLabel');
+const stepsOut = document.getElementById('steps');
+const octOut = document.getElementById('octaves');
+
+function applySliders(){
+  stepsCount = parseInt(stepsSlider.value);
+  octCount = parseInt(octSlider.value);
+  loadLabel.textContent = stepsCount + ' steps';
+  octLabel.textContent = octCount + ' oct';
+  stepsOut.textContent = stepsCount;
+  octOut.textContent = octCount;
+  buildProgram(stepsCount, octCount);
+}
+stepsSlider.addEventListener('input', applySliders);
+octSlider.addEventListener('input', applySliders);
+applySliders();
+
+// fps counter
+let lastFrame = performance.now();
+let fpsSmooth = 60;
+const fpsOut = document.getElementById('fps');
+
+function frame(now){
+  const dt = (now-lastFrame)/1000;
+  lastFrame = now;
+  const fps = 1/Math.max(dt,0.0001);
+  fpsSmooth += (fps-fpsSmooth)*0.08;
+  fpsOut.textContent = fpsSmooth.toFixed(0);
+
+  if(idle) orbit[0] += 0.0015;
+
+  gl.useProgram(program);
+  gl.uniform2f(uRes, canvas.width, canvas.height);
+  gl.uniform1f(uTime, now*0.001);
+  gl.uniform2f(uOrbit, orbit[0], orbit[1]);
+  gl.uniform1f(uZoom, zoom);
+
+  const verts3D = project5DFrame(now*0.001);
+  for(let i=0;i<6;i++){
+    gl.uniform3f(uVertsLoc[i], verts3D[i][0], verts3D[i][1], verts3D[i][2]);
+  }
+
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
